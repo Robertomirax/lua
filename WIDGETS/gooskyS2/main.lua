@@ -1,63 +1,42 @@
 ---------------------------------------------------------------------------
 ---Widget para Goosky S2 y Radiomaster TX16S mk2
--- Creado por @Roberto Domingues
+-- Versión de Roberto Domingues
 -- EdgeTX 2.11+
 ---------------------------------------------------------------------------
 ---
 ---@diagnostic disable: undefined-global
+---------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------
---- Primer campo obligatorio: NAME  (string)
---- 
--- Esta variable define el nombre del widget, que se mostrará en la interfaz
--- de configuración y en la lista de widgets disponibles. Es importante
--- elegir un nombre descriptivo y único para que los usuarios puedan
--- identificar fácilmente el widget y su función. El nombre también puede
--- ser utilizado en el código para referirse al widget, por lo que es
--- recomendable evitar caracteres especiales o espacios en blanco que puedan
--- causar problemas de sintaxis. En este caso, el widget se llama "gooskyS2",
--- lo que sugiere que está diseñado para mostrar información relacionada
--- con el helicóptero Goosky S2 y la radio Radiomaster TX16S mk2.
---
--- El nombre debe tener 10 caracteres o menos para que se muestre
--- correctamente en la interfaz de EdgeTX.
+-- variables globales
+----------------------------------------------------------------------------
+-- Esta sección se utiliza para definir variables globales que pueden ser
+-- utilizadas en todo el widget. Estas variables pueden almacenar información
+-- como colores, imágenes, estados, etc. En este caso, se definen dos colores
+-- personalizados, BROWN y PINK, utilizando la función lcd.RGB para crear
+-- colores específicos que se utilizarán en el widget. Estas variables
+-- globales permiten que el widget tenga una apariencia personalizada y
+-- consistente en toda su interfaz, y facilitan la reutilización de valores
+-- que se necesitan en diferentes partes del código, como en la función de
+-- refresco para dibujar elementos con los colores definidos.
 ---------------------------------------------------------------------------
-local name = "gooskyS2"
-
 
 local BROWN = lcd.RGB(79, 54, 39)
 local PINK = lcd.RGB(206, 126, 252)
 
 ---------------------------------------------------------------------------
---- Segundo campo (opcional): OPTIONS (tabla)
---- 
--- Esta función define las opciones que el usuario puede configurar para el
--- widget. Cada opción tiene un nombre, un tipo
--- (SWITCH, RADIO, METER, PANEL, SOURCE, etc.)
--- y un valor por defecto. Estas opciones se mostrarán en la interfaz de
--- configuración del widget y el usuario podrá modificarlas según sus
--- necesidades. El widget luego puede acceder a estas opciones para mostrar
--- la información correspondiente.
+--- Funciones auxiliares. Estas funciones se utilizan para realizar tareas
+---  específicas que se necesitan en el widget, como cargar imágenes,
+---  dibujar iconos personalizados, formatear texto, etc. Estas funciones
+---  ayudan a mantener el código organizado y modular, permitiendo que la
+---  lógica principal del widget sea más clara y fácil de entender. En este
+---  caso, se definen funciones para cargar imágenes desde la carpeta IMAGES
+---  del widget, formatear etiquetas de fuentes de datos y dibujar un icono
+---  de batería personalizado. Estas funciones se pueden llamar desde la
+---  función de refresco para mostrar información visualmente atractiva y
+---  personalizada en la pantalla del widget, mejorando la experiencia del
+---  usuario y proporcionando información relevante de manera clara y concisa. 
 ---------------------------------------------------------------------------
-
-local options = {
-    { "Arm",       SWITCH, 0 },
-    { "Motor",     SWITCH, 0 },
-    { "Modo",      SWITCH, 0 },
-    { "Rx Signal", SOURCE, 0 }, --1RSS
-    { "Rx Qly",    SOURCE, 0 },
-    { "RpmH",      SOURCE, 0 },
-    { "RpmT",      SOURCE, 0 },
-    { "Curr",      SOURCE, 0 },
-    { "Tesc",      SOURCE, 0 },
-    { "Vcel",      SOURCE, 0 },
-    { "Bat%",      SOURCE, 0 },
-    { "Capa",      SOURCE, 0 },
-    { "Tpwr",      SOURCE, 0 },
-    { "Trss",      SOURCE, 0 }, --TRSS
-    { "Tqly",      SOURCE, 0 }, --TQly
-}
-
 ---------------------------------------------------------------------------
 -- IMAGE funciones para cargar imágenes desde la carpeta IMAGES del widget.
 -- La función pngFilename se encarga de verificar si el nombre de la imagen
@@ -102,6 +81,82 @@ local function loadImage(imgName)
 
     return false
 end
+
+---------------------------------------------------------------------------
+-- SOURCE LABEL FUNCTION
+---------------------------------------------------------------------------
+local function sourceLabel(src, fallback)
+    if src ~= 0 then
+        local info = getSourceInfo(src)
+        if info and info.name then
+            return info.name
+        end
+    end
+    return fallback
+end
+
+---------------------------------------------------------------------------
+-- BATTERY ICON
+---------------------------------------------------------------------------
+local function drawBatteryIcon(x, y, w, h, percent, color)
+    lcd.drawRectangle(x, y, w, h, WHITE)
+    lcd.drawFilledRectangle(x + w, y + h / 3, 4, h / 3, WHITE)
+    lcd.drawFilledRectangle(x + 1, y + 1, (w - 2) * percent, h - 2, color)
+end
+
+
+
+
+
+---------------------------------------------------------------------------
+--- Primer campo obligatorio: NAME  (string)
+--- 
+-- Esta variable define el nombre del widget, que se mostrará en la interfaz
+-- de configuración y en la lista de widgets disponibles. Es importante
+-- elegir un nombre descriptivo y único para que los usuarios puedan
+-- identificar fácilmente el widget y su función. El nombre también puede
+-- ser utilizado en el código para referirse al widget, por lo que es
+-- recomendable evitar caracteres especiales o espacios en blanco que puedan
+-- causar problemas de sintaxis. En este caso, el widget se llama "gooskyS2",
+-- lo que sugiere que está diseñado para mostrar información relacionada
+-- con el helicóptero Goosky S2 y la radio Radiomaster TX16S mk2.
+--
+-- El nombre debe tener 10 caracteres o menos para que se muestre
+-- correctamente en la interfaz de EdgeTX.
+---------------------------------------------------------------------------
+local name = "gooskyS2"
+
+---------------------------------------------------------------------------
+--- Segundo campo (opcional): OPTIONS (tabla)
+--- 
+-- Esta función define las opciones que el usuario puede configurar para el
+-- widget. Cada opción tiene un nombre, un tipo
+-- (SWITCH, RADIO, METER, PANEL, SOURCE, etc.)
+-- y un valor por defecto. Estas opciones se mostrarán en la interfaz de
+-- configuración del widget y el usuario podrá modificarlas según sus
+-- necesidades. El widget luego puede acceder a estas opciones para mostrar
+-- la información correspondiente.
+---------------------------------------------------------------------------
+
+local options = {
+    { "Arm",       SWITCH, 0 },
+    { "Motor",     SWITCH, 0 },
+    { "Modo",      SWITCH, 0 },
+    { "Rx Signal", SOURCE, 0 }, --1RSS
+    { "Rx Qly",    SOURCE, 0 },
+    { "RpmH",      SOURCE, 0 },
+    { "RpmT",      SOURCE, 0 },
+    { "Curr",      SOURCE, 0 },
+    { "Tesc",      SOURCE, 0 },
+    { "Vcel",      SOURCE, 0 },
+    { "Bat%",      SOURCE, 0 },
+    { "Capa",      SOURCE, 0 },
+    { "Tpwr",      SOURCE, 0 },
+    { "Trss",      SOURCE, 0 }, --TRSS
+    { "Tqly",      SOURCE, 0 }, --TQly
+}
+
+
 
 ---------------------------------------------------------------------------
 --- Tercer campo (obligatorio): CREATE (función)
@@ -174,6 +229,7 @@ end
 
 ---------------------------------------------------------------------------
 --- Quinto campo (opcional): BACKGROUND (función)
+--- 
 --- EdgeTX llama a esta función para dibujar el fondo del widget. Aquí es
 --- donde se deben implementar las funciones de dibujo para crear el fondo
 --- del widget, como dibujar formas, líneas, colores, etc. El fondo se
@@ -208,27 +264,7 @@ end
 ---  función para que el fondo se dibuje de manera eficiente y no cause
 ---  retrasos en la interfaz.
 ----------------------------------------------------------------------------
----------------------------------------------------------------------------
--- SOURCE LABEL FUNCTION
----------------------------------------------------------------------------
-local function sourceLabel(src, fallback)
-    if src ~= 0 then
-        local info = getSourceInfo(src)
-        if info and info.name then
-            return info.name
-        end
-    end
-    return fallback
-end
 
----------------------------------------------------------------------------
--- BATTERY ICON
----------------------------------------------------------------------------
-local function drawBatteryIcon(x, y, w, h, percent, color)
-    lcd.drawRectangle(x, y, w, h, WHITE)
-    lcd.drawFilledRectangle(x + w, y + h / 3, 4, h / 3, WHITE)
-    lcd.drawFilledRectangle(x + 1, y + 1, (w - 2) * percent, h - 2, color)
-end
 ---------------------------------------------------------------------------
 -- REFRESH
 -- Esta función se llama cada vez que el widget necesita ser redibujado.

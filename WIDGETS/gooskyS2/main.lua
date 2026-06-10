@@ -7,7 +7,8 @@
 ---@diagnostic disable: undefined-global
 
 ---------------------------------------------------------------------------
--- NOMBRE DEL WIDGET
+--- Primer campo obligatorio: NAME  (string)
+--- 
 -- Esta variable define el nombre del widget, que se mostrará en la interfaz
 -- de configuración y en la lista de widgets disponibles. Es importante
 -- elegir un nombre descriptivo y único para que los usuarios puedan
@@ -28,7 +29,8 @@ local BROWN = lcd.RGB(79, 54, 39)
 local PINK = lcd.RGB(206, 126, 252)
 
 ---------------------------------------------------------------------------
--- OPTIONS
+--- Segundo campo (opcional): OPTIONS (tabla)
+--- 
 -- Esta función define las opciones que el usuario puede configurar para el
 -- widget. Cada opción tiene un nombre, un tipo
 -- (SWITCH, RADIO, METER, PANEL, SOURCE, etc.)
@@ -102,13 +104,37 @@ local function loadImage(imgName)
 end
 
 ---------------------------------------------------------------------------
--- CREATE
+--- Tercer campo (obligatorio): CREATE (función)
+--- 
 --Esta función se llama una sola vez cuando se registra (se inicia) la
 --instancia del widget. Aquí es donde se deben inicializar las variables,
 --cargar recursos, cargar imágenes, etc. El widget se crea con una zona
 --(zone) y opciones (opts) que se definen en la tabla de opciones.
----------------------------------------------------------------------------
+-- el parametro zone es un objeto que contiene las coordenadas y dimensiones
+-- de la zona asignada al widget en la pantalla. El widget puede usar esta
+-- información para dibujar su contenido dentro de esa zona específica.
+-- El parámetro opts es una tabla que contiene las opciones configuradas
+-- por el usuario para el widget, como los interruptores, fuentes de datos,
+-- etc. Estas opciones se pueden usar para personalizar la apariencia y el
+-- comportamiento del widget según las preferencias del usuario. En esta
+-- función, también se puede cargar una imagen personalizada para el widget
+-- utilizando la función loadImage, lo que permite mostrar gráficos o iconos
+-- específicos relacionados con el Goosky S2 o la Radiomaster TX16S mk2.
+--
+-- Parámetros:
+-- - zone: un objeto que contiene las coordenadas (x, y) y
+-- dimensiones (w, h) de la zona asignada al widget en la pantalla.
+-- - opts: una tabla que contiene las opciones configuradas por el usuario
+--  para el widget, como los interruptores, fuentes de datos, etc.
+-- Estas opciones se pueden usar para personalizar la apariencia y el
+-- comportamiento del widget según las preferencias del usuario.
 
+-- Esta función debe devolver una tabla que representa el widget, que puede
+-- contener cualquier información o estado necesario para el widget durante
+-- su vida útil. Esta tabla se pasará a las funciones de actualización y
+-- refresco ( update , background & refresh) para que puedan acceder a la
+-- información del widget y mostrarla en la pantalla.
+---------------------------------------------------------------------------
 
 local function create(zone, opts)
     local w = { zone = zone, options = opts or {} }
@@ -120,13 +146,68 @@ local function create(zone, opts)
 end
 
 ---------------------------------------------------------------------------
--- UPDATE
--- Esta función se llama cada vez que se actualizan las opciones del widget
+--- Cuarto campo (opcional): UPDATE (función)
+--- 
+-- Esta función se llama cada vez que se modifican las opciones del widget
+-- en la interfaz de configuración. Aquí es donde se deben actualizar las
+-- opciones del widget con los nuevos valores configurados por el usuario.
+-- El widget se actualiza con una tabla de opciones (opts) que contiene los
+-- nuevos valores configurados por el usuario. Esta función es importante
+-- para asegurarse de que el widget refleje correctamente las preferencias
+-- del usuario y muestre la información correcta en la pantalla.
+-- Al actualizar las opciones, el widget puede cambiar su apariencia,
+-- mostrar diferentes datos o ajustar su comportamiento según las nuevas
+-- configuraciones. Es importante que esta función sea eficiente y no cause
+-- retrasos en la interfaz, ya que se llamará cada vez que el usuario
+-- realice cambios en las opciones del widget.
+-- Parámetros:
+-- - widget: la tabla que representa el widget, que se creó en la función   
+-- create.
+-- - opts: una tabla que contiene las nuevas opciones configuradas por el
+-- usuario para el widget. Estas opciones pueden incluir interruptores,
+-- fuentes de datos, etc., y se deben usar para actualizar la apariencia
+-- y el comportamiento del widget según las preferencias del usuario.
 ---------------------------------------------------------------------------
 local function update(widget, opts)
     widget.options = opts
 end
 
+---------------------------------------------------------------------------
+--- Quinto campo (opcional): BACKGROUND (función)
+--- EdgeTX llama a esta función para dibujar el fondo del widget. Aquí es
+--- donde se deben implementar las funciones de dibujo para crear el fondo
+--- del widget, como dibujar formas, líneas, colores, etc. El fondo se
+--- dibuja antes de que se llame a la función de refresco, por lo que
+--- cualquier elemento dibujado en esta función se mostrará detrás de los
+--- elementos dibujados en la función de refresco. Es importante optimizar
+--- esta función para que el fondo se dibuje de manera eficiente y no cause
+--- retrasos en la interfaz. Además, el fondo debe ser lo suficientemente
+--- claro para que los elementos dibujados en la función de refresco sean
+--- legibles y visibles para el usuario.
+--- Se ejecuta periódicamente solo cuando la instancia del widget no está
+---  visible
+-- Parámetros:
+-- - widget: la tabla que representa el widget, que se creó en la función
+-- create. Esta tabla puede contener cualquier información o estado necesario
+-- para el widget durante su vida útil, y se puede usar para almacenar
+-- datos que se necesiten para dibujar el fondo del widget.
+---------------------------------------------------------------------------
+--- En este caso, no se implementa una función de fondo personalizada, por
+---  lo que el widget utilizará el fondo predeterminado de EdgeTX.
+---  Si se desea agregar un fondo personalizado, se puede implementar esta
+---  función para dibujar formas, líneas o colores específicos que
+---  complementen la apariencia del widget y mejoren la legibilidad de la
+---  información mostrada en la función de refresco.
+--- Si no se necesita un fondo personalizado, esta función puede omitirse
+---  o dejarse vacía, y el widget seguirá funcionando correctamente
+---  utilizando el fondo predeterminado de EdgeTX.
+--- Si se implementa una función de fondo personalizada, es importante
+---  asegurarse de que el fondo no sea demasiado oscuro o demasiado claro,
+---  para que los elementos dibujados en la función de refresco sean
+---  legibles y visibles para el usuario. Además, se debe optimizar esta
+---  función para que el fondo se dibuje de manera eficiente y no cause
+---  retrasos en la interfaz.
+----------------------------------------------------------------------------
 ---------------------------------------------------------------------------
 -- SOURCE LABEL FUNCTION
 ---------------------------------------------------------------------------

@@ -1,12 +1,7 @@
-
-
 ---------------------------------------------------------------------------
 ---Widget para Goosky S2 y Radiomaster TX16S mk2
 -- Versión de Roberto Domingues
 -- EdgeTX 2.11+
-
--- La imagen "S2t.png" debe estar en la carpeta IMAGES del widget para que
--- se muestre correctamente.
 ---------------------------------------------------------------------------
 ---
 ---@diagnostic disable: undefined-global
@@ -40,7 +35,7 @@ local PINK = lcd.RGB(206, 126, 252)
 ---  de batería personalizado. Estas funciones se pueden llamar desde la
 ---  función de refresco para mostrar información visualmente atractiva y
 ---  personalizada en la pantalla del widget, mejorando la experiencia del
----  usuario y proporcionando información relevante de manera clara y concisa.
+---  usuario y proporcionando información relevante de manera clara y concisa. 
 ---------------------------------------------------------------------------
 ---------------------------------------------------------------------------
 -- IMAGE funciones para cargar imágenes desde la carpeta IMAGES del widget.
@@ -55,37 +50,67 @@ local PINK = lcd.RGB(206, 126, 252)
 -- estén en la carpeta correcta y tengan el formato adecuado para que se
 -- carguen correctamente en el widget.
 ----------------------------------------------------------------------------
---*************************************************************************
----FUNCIONES AUXILIARES
+-- Verificar si la imagen tiene extensión .png, si no, agregarla
+local bm = nil
+
+local function pngFilename(imgName)
+    if not imgName or imgName == "" then return nil end
+
+    if not string.match(imgName, "%.png$") then
+        imgName = imgName .. ".png"
+    end
+
+    return imgName
+end
 
 
-----------------------------------------------------------------------------
+local function loadImage(imgName)
+    bm = nil
+
+    if not imgName or imgName == "" then return false end
+
+    local filename = pngFilename(imgName)
+    local path = "/IMAGES/" .. filename
+
+    local ok, img = pcall(Bitmap.open, path)
+
+    if ok and img then
+        bm = img
+        return true
+    end
+
+    return false
+end
+
+---------------------------------------------------------------------------
+-- SOURCE LABEL FUNCTION
+---------------------------------------------------------------------------
+local function sourceLabel(src, fallback)
+    if src ~= 0 then
+        local info = getSourceInfo(src)
+        if info and info.name then
+            return info.name
+        end
+    end
+    return fallback
+end
+
+---------------------------------------------------------------------------
 -- BATTERY ICON
-----------------------------------------------------------------------------
+---------------------------------------------------------------------------
 local function drawBatteryIcon(x, y, w, h, percent, color)
     lcd.drawRectangle(x, y, w, h, WHITE)
     lcd.drawFilledRectangle(x + w, y + h / 3, 4, h / 3, WHITE)
     lcd.drawFilledRectangle(x + 1, y + 1, (w - 2) * percent, h - 2, color)
 end
---*************************************************************************
 
---+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
---- CAMPOS DEL WIDGET
---- Cada widget debe definir al menos tres campos: NAME, CREATE y REFRESH. El
---- campo NAME es una cadena que identifica el widget, CREATE es una función
----    que se llama para crear una instancia del widget, y REFRESH es una
----  función que se llama para dibujar el widget en la pantalla.
----  Además, el widget puede definir un campo OPTIONS para permitir que
----  el usuario configure opciones personalizadas para el widget, y un campo
----  UPDATE para actualizar las opciones del widget cuando el usuario las
----  cambie en la interfaz de configuración. Estos campos son esenciales
----  para que el widget funcione correctamente en EdgeTX, y deben ser
----  definidos de manera clara y coherente para que el widget sea fácil de
----  usar y personalizar por los usuarios.
+
+
+
 
 ---------------------------------------------------------------------------
 --- Primer campo obligatorio: NAME  (string)
----
+--- 
 -- Esta variable define el nombre del widget, que se mostrará en la interfaz
 -- de configuración y en la lista de widgets disponibles. Es importante
 -- elegir un nombre descriptivo y único para que los usuarios puedan
@@ -94,7 +119,7 @@ end
 -- recomendable evitar caracteres especiales o espacios en blanco que puedan
 -- causar problemas de sintaxis. En este caso, el widget se llama "gooskyS2",
 -- lo que sugiere que está diseñado para mostrar información relacionada
--- con el helicóptero Goosky S2.
+-- con el helicóptero Goosky S2 y la radio Radiomaster TX16S mk2.
 --
 -- El nombre debe tener 10 caracteres o menos para que se muestre
 -- correctamente en la interfaz de EdgeTX.
@@ -103,7 +128,7 @@ local name = "gooskyS2"
 
 ---------------------------------------------------------------------------
 --- Segundo campo (opcional): OPTIONS (tabla)
----
+--- 
 -- Esta función define las opciones que el usuario puede configurar para el
 -- widget. Cada opción tiene un nombre, un tipo
 -- (SWITCH, RADIO, METER, PANEL, SOURCE, etc.)
@@ -111,22 +136,32 @@ local name = "gooskyS2"
 -- configuración del widget y el usuario podrá modificarlas según sus
 -- necesidades. El widget luego puede acceder a estas opciones para mostrar
 -- la información correspondiente.
--- El número máximo de opciones es 10
 ---------------------------------------------------------------------------
 
 
-local options_def = {
-    { "Arm",   SWITCH, 0 },
-    { "Motor", SWITCH, 0 },
-    { "Modo",  SWITCH, 0 },
-    { "Imagen", SOURCE, 0, "S2t.png" },
+local options = {
+    { "Arm",       SWITCH, 0 },
+    { "Motor",     SWITCH, 0 },
+    { "Modo",      SWITCH, 0 },
+    { "Rx Signal", SOURCE, 0 }, --1RSS
+    { "Rx Qly",    SOURCE, 0 },
+    { "RpmH",      SOURCE, 0 },
+    { "RpmT",      SOURCE, 0 },
+    { "Curr",      SOURCE, 0 },
+    { "Tesc",      SOURCE, 0 },
+    { "Vcel",      SOURCE, 0 },
+    { "Bat%",      SOURCE, 0 },
+    { "Capa",      SOURCE, 0 },
+    { "Tpwr",      SOURCE, 0 },
+    { "Trss",      SOURCE, 0 }, --TRSS
+    { "Tqly",      SOURCE, 0 }, --TQly
 }
 
 
 
 ---------------------------------------------------------------------------
 --- Tercer campo (obligatorio): CREATE (función)
----
+--- 
 --Esta función se llama una sola vez cuando se registra (se inicia) la
 --instancia del widget. Aquí es donde se deben inicializar las variables,
 --cargar recursos, cargar imágenes, etc. El widget se crea con una zona
@@ -157,19 +192,18 @@ local options_def = {
 -- información del widget y mostrarla en la pantalla.
 ---------------------------------------------------------------------------
 
-local function create(zone, options)
-    local w = { zone = zone, options = options or {} }
+local function create(zone, opts)
+    local w = { zone = zone, options = opts or {} }
 
-     -- Cargar la imagen seleccionada por el usuario
-    if options and options.Imagen and options.Imagen ~= "" then
-        bmp = lcd.loadBitmap("/IMAGES/" .. options.Imagen)
-    end
+    local modelName = model.getInfo().name
+    --loadImage(modelName)
+    loadImage("S2t.png")
     return w
 end
 
 ---------------------------------------------------------------------------
 --- Cuarto campo (opcional): UPDATE (función)
----
+--- 
 -- Esta función se llama cada vez que se modifican las opciones del widget
 -- en la interfaz de configuración. Aquí es donde se deben actualizar las
 -- opciones del widget con los nuevos valores configurados por el usuario.
@@ -183,7 +217,7 @@ end
 -- retrasos en la interfaz, ya que se llamará cada vez que el usuario
 -- realice cambios en las opciones del widget.
 -- Parámetros:
--- - widget: la tabla que representa el widget, que se creó en la función
+-- - widget: la tabla que representa el widget, que se creó en la función   
 -- create.
 -- - opts: una tabla que contiene las nuevas opciones configuradas por el
 -- usuario para el widget. Estas opciones pueden incluir interruptores,
@@ -196,7 +230,7 @@ end
 
 ---------------------------------------------------------------------------
 --- Quinto campo (opcional): BACKGROUND (función)
----
+--- 
 --- EdgeTX llama a esta función para dibujar el fondo del widget. Aquí es
 --- donde se deben implementar las funciones de dibujo para crear el fondo
 --- del widget, como dibujar formas, líneas, colores, etc. El fondo se
@@ -255,10 +289,10 @@ local function refresh(widget)
     ---------------------------------------------------------------------------
 
     local rssVal   = 0
-    local rxSignal = getValue("1RSS") or 0
+    local rxSignal = opt["Rx Signal"]
 
     if rxSignal ~= nil and rxSignal ~= 0 then
-        rssVal = getValue("1RSS") or 0
+        rssVal = getValue(rxSignal)
     end
 
     local motorOn = opt.Motor ~= 0 and getSwitchValue(opt.Motor) == true
@@ -292,16 +326,14 @@ local function refresh(widget)
 
     lcd.drawText(z.x + z.w - 320, z.y + (z.h - 90), texts[4], DBLSIZE + modeColor)
 
-    if bmp then
-        lcd.drawBitmap(bmp, z.x + z.w - 320, z.y + 30)
+    if bm then
+        lcd.drawBitmap(bm, z.x + z.w - 320, z.y + 30)
     end
-
 
     ---------------------------------------------------------------------------
     -- OPTIONS / TELEMTERY VALUES
     ---------------------------------------------------------------------------
-    local rqtyVal = getValue("RQly") or 0
-    --[[
+    local rqtyVal  = (opt["Rx Qly"] ~= 0 and getValue(opt["Rx Qly"])) or 0
     local tescVal  = (opt["Tesc"] ~= 0 and getValue(opt["Tesc"])) or 0
     local currVal  = (opt["Curr"] ~= 0 and getValue(opt["Curr"])) or 0
     local RpmHVal  = (opt["RpmH"] ~= 0 and getValue(opt["RpmH"])) or 0
@@ -310,21 +342,18 @@ local function refresh(widget)
     local tpwrVal  = (opt["Tpwr"] ~= 0 and getValue(opt["Tpwr"])) or 0
     local trssVal  = (opt["Trss"] ~= 0 and getValue(opt["Trss"])) or 0
     local tqlyVal  = (opt["Tqly"] ~= 0 and getValue(opt["Tqly"])) or 0
-]]
+
     local rssColor = (rssVal > -80) and GREEN or ((rssVal > -90) and YELLOW or RED)
     lcd.drawText((z.x + (z.w / 8 * 1)), z.y + (z.h - 45), string.format("%ddB", rssVal),
         CENTER + ((rssVal ~= 0) and rssColor or WHITE))
-    lcd.drawText((z.x + (z.w / 8 * 1)), z.y + (z.h - 25), "1RSS",
+    lcd.drawText((z.x + (z.w / 8 * 1)), z.y + (z.h - 25), sourceLabel(opt["Rx Signal"], "1RSS"),
         CENTER + ((rssVal ~= 0) and rssColor or WHITE))
-
 
     local rqtyColor = (rqtyVal > 98) and GREEN or ((rqtyVal > 90) and YELLOW or RED)
     lcd.drawText((z.x + (z.w / 8 * 2)), z.y + (z.h - 45), string.format("%d%%", rqtyVal),
         CENTER + ((rssVal ~= 0) and rqtyColor or WHITE))
-    lcd.drawText((z.x + (z.w / 8 * 2)), z.y + (z.h - 25), "RQly",
+    lcd.drawText((z.x + (z.w / 8 * 2)), z.y + (z.h - 25), sourceLabel(opt["Rx Qly"], "RQly"),
         CENTER + ((rssVal ~= 0) and rqtyColor or WHITE))
-
-    --[[
 
     local tpwrColor = (tpwrVal > 200) and GREEN or ((tpwrVal > 99) and YELLOW or RED)
     lcd.drawText((z.x + (z.w / 8 * 3)), z.y + (z.h - 45), string.format("%dmW", tpwrVal),
@@ -372,7 +401,7 @@ local function refresh(widget)
     ---------------------------------------------------------------------------
     -- TIMER
     ---------------------------------------------------------------------------
-]]
+
     local timer = model.getTimer(0) --Timer 1 (index starts at 0)
     local timeLeft = timer.value or 0
 
@@ -404,7 +433,7 @@ local function refresh(widget)
     -- RX BATTERY
     -------------------------------------------------------------------------
 
-    --[[
+
     -- VBAT Voltage → Percentage
     local vMin = 3.3
     local vMax = 4.2
@@ -456,7 +485,6 @@ local function refresh(widget)
 
     lcd.drawGauge(battX, battY + battH + 30, battW, 20, capaVal, 750, BROWN)
     lcd.drawText(textX, textY + 63, string.format("%dmA", capaVal), CENTER + WHITE)
-    ]]
 end
 ---------------------------------------------------------------------------
 --- RETURN
@@ -475,77 +503,5 @@ return {
     create = create,
     refresh = refresh,
     update = update,
-    options = options_def
+    options = options
 }
-
-
---[[
-
-
-local name = "gooskyS2"
-
--- Lista de sensores a mostrar en texto
-local sensors = {
-    "Alt",    -- Altitud
-    "GPS",    -- Coordenadas GPS
-    "Tmp1",   -- Temperatura 1
-    "Tmp2",   -- Temperatura 2
-    "Fuel",   -- Combustible
-    "RPM",    -- Revoluciones
-    "AccX",   -- Acelerómetro X
-    "AccY",   -- Acelerómetro Y
-    "AccZ"    -- Acelerómetro Z
-}
-
--- Función para dibujar un gauge circular
--- Recibe posición (x,y), radio, valor actual y rango máximo
-local function drawGauge(x, y, r, value, max, label)
-    -- Dibuja círculo base
-    lcd.drawCircle(x, y, r, SOLID, FORCE)
-    -- Calcula ángulo proporcional al valor
-    local angle = math.floor((value / max) * 270) - 135
-    local rad = math.rad(angle)
-    local gx = x + math.floor(r * math.cos(rad))
-    local gy = y + math.floor(r * math.sin(rad))
-    -- Dibuja aguja
-    lcd.drawLine(x, y, gx, gy, SOLID, FORCE)
-    -- Etiqueta y valor
-    lcd.drawText(x - r, y + r + 5, label .. ": " .. tostring(value), 0)
-end
-
--- Función create: inicializa el widget
-local function create(zone, options)
-    return { zone=zone, options=options }
-end
-
--- Función update: actualiza opciones si cambian
-local function update(widget, options)
-    widget.options = options
-end
-
--- Función refresh: dibuja gauges y lista de sensores
-local function refresh(widget)
-    lcd.clear()
-
-    -- Gauges principales
-    local volt = getValue("VFAS") or 0
-    local curr = getValue("Curr") or 0
-    local rssi = getValue("RSSI") or 0
-
-    -- Dibuja tres gauges en la parte superior
-    drawGauge(widget.zone.x + 40, widget.zone.y + 40, 30, volt, 25, "Volt")
-    drawGauge(widget.zone.x + 120, widget.zone.y + 40, 30, curr, 50, "Amp")
-    drawGauge(widget.zone.x + 200, widget.zone.y + 40, 30, rssi, 100, "RSSI")
-
-    -- Lista de sensores adicionales en texto
-    local y = widget.zone.y + 90
-    for i, s in ipairs(sensors) do
-        local val = getValue(s)
-        lcd.drawText(widget.zone.x, y, s .. ": " .. tostring(val), 0)
-        y = y + 12
-    end
-end
-
--- Registro del widget
-return { name=name, create=create, update=update, refresh=refresh }
-]]

@@ -1,5 +1,3 @@
-
-
 ---------------------------------------------------------------------------
 ---Widget para Goosky S2 y Radiomaster TX16S mk2
 -- Versión de Roberto Domingues
@@ -18,7 +16,7 @@
 -- Esta sección se utiliza para definir variables globales que pueden ser
 -- utilizadas en todo el widget. Estas variables pueden almacenar información
 -- como colores, imágenes, estados, etc. En este caso, se definen dos colores
--- personalizados, BROWN y PINK, utilizando la función lcd.RGB para crear
+-- personalizados, BROWN y ROSA, utilizando la función lcd.RGB para crear
 -- colores específicos que se utilizarán en el widget. Estas variables
 -- globales permiten que el widget tenga una apariencia personalizada y
 -- consistente en toda su interfaz, y facilitan la reutilización de valores
@@ -26,8 +24,12 @@
 -- refresco para dibujar elementos con los colores definidos.
 ---------------------------------------------------------------------------
 
-local BROWN = lcd.RGB(79, 54, 39)
-local PINK = lcd.RGB(206, 126, 252)
+local ROSA = lcd.RGB(206, 126, 252)
+
+-- Variables internas del timer
+local startTime = 0
+local elapsed = 0
+local running = false
 
 ---------------------------------------------------------------------------
 --- Funciones auxiliares. Estas funciones se utilizan para realizar tareas
@@ -59,21 +61,21 @@ local PINK = lcd.RGB(206, 126, 252)
 ---FUNCIONES AUXILIARES
 
 
-----------------------------------------------------------------------------
+
 -- BATTERY ICON
-----------------------------------------------------------------------------
 local function drawBatteryIcon(x, y, w, h, percent, color)
     lcd.drawRectangle(x, y, w, h, WHITE)
     lcd.drawFilledRectangle(x + w, y + h / 3, 4, h / 3, WHITE)
     lcd.drawFilledRectangle(x + 1, y + 1, (w - 2) * percent, h - 2, color)
 end
+
 --*************************************************************************
 
 --+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 --- CAMPOS DEL WIDGET
 --- Cada widget debe definir al menos tres campos: NAME, CREATE y REFRESH. El
 --- campo NAME es una cadena que identifica el widget, CREATE es una función
----    que se llama para crear una instancia del widget, y REFRESH es una
+---  que se llama para crear una instancia del widget, y REFRESH es una
 ---  función que se llama para dibujar el widget en la pantalla.
 ---  Además, el widget puede definir un campo OPTIONS para permitir que
 ---  el usuario configure opciones personalizadas para el widget, y un campo
@@ -85,6 +87,10 @@ end
 
 ---------------------------------------------------------------------------
 --- Primer campo obligatorio: NAME  (string)
+---
+--- La carpeta del widget debe tener el mismo nombre que el campo NAME para
+--- que el widget se registre correctamente en EdgeTX. El campo NAME es una
+--- cadena que identifica el widget.
 ---
 -- Esta variable define el nombre del widget, que se mostrará en la interfaz
 -- de configuración y en la lista de widgets disponibles. Es importante
@@ -112,16 +118,57 @@ local name = "gooskyS2"
 -- necesidades. El widget luego puede acceder a estas opciones para mostrar
 -- la información correspondiente.
 -- El número máximo de opciones es 10
+
+--[[
+Tipos de opciones:
+- COLOR:        Displays a color picker, returns a color flag value
+
+- BOOL:         Displays a toggle/checkbox, value toggles between 0 and 1
+
+- STRING:       Text input option, limited to  12 characters in 2.11.
+
+- TIMER:        Choice option, lets you pick from available timers
+
+- SOURCE:       Choice option, lets you pick from available sources
+                (i.e. sticks, switches, LS)
+
+- SWITCH:       Choice option to select from available switches.
+
+- VALUE:        Numerical input option, can specify default, min and max value
+
+- TEXT_SIZE:    Choice option, lets you pick from the available text sizes
+                (i.e. small, large)
+
+- ALIGNMENT:    Choice option, lets you pick from available alignment options
+                (i.e. left, center, right)
+
+- SLIDER:       Select numerical value using a slider control (available in 2.11)
+
+- CHOICE:       Select numerical value using a custom popup list (available in 2.11)
+
+- FILE:         Select a file from SD card / WIDGETS folder.
+                Filename is limited to 12 characters maximum.
+
+--]]
 ---------------------------------------------------------------------------
 
 
-local options_def = {
-    { "Arm",   SWITCH, 0 },
-    { "Motor", SWITCH, 0 },
-    { "Modo",  SWITCH, 0 },
-    { "Imagen", SOURCE, 0, "S2t.png" },
+-- Esta tabla define las opciones configurables para el widget. Cada opción
+--   tiene un nombre (por ejemplo, "Arm", "Motor", "Modo", "Revo"), un tipo
+-- (en este caso, SOURCE, que permite seleccionar una fuente de datos como
+-- un interruptor) y un valor por defecto (por ejemplo, "SE", "SF", "SA", "SB").
+-- Estas opciones se mostrarán en la interfaz de configuración del widget,
+-- y el usuario podrá seleccionar las fuentes de datos correspondientes para
+-- cada opción. El widget luego puede acceder a estas opciones para mostrar
+-- la información relevante en la pantalla, como el estado de armado, el
+-- estado del motor, el modo de vuelo, etc., según las fuentes de datos
+-- seleccionadas por el usuario.
+local options = {
+    { "Arm",   SOURCE, "SE" },
+    { "Motor", SOURCE, "SF" },
+    { "Modo",  SOURCE, "SA" },
+    { "Revo",  SOURCE, "SB" },
 }
-
 
 
 ---------------------------------------------------------------------------
@@ -157,14 +204,18 @@ local options_def = {
 -- información del widget y mostrarla en la pantalla.
 ---------------------------------------------------------------------------
 
-local function create(zone, options)
-    local w = { zone = zone, options = options or {} }
+local function create(zone, opts)
+    local widget = { zone = zone, options = opts or {} }
 
-     -- Cargar la imagen seleccionada por el usuario
-    if options and options.Imagen and options.Imagen ~= "" then
-        bmp = lcd.loadBitmap("/IMAGES/" .. options.Imagen)
+    -- Intento protegido de cargar la imagen seleccionada
+    local ok, img = pcall(Bitmap.open, "/IMAGES/S2t.png")
+    if ok and img then
+        widget.bmp = img
+    else
+        widget.bmp = nil
     end
-    return w
+
+    return widget
 end
 
 ---------------------------------------------------------------------------
@@ -236,7 +287,7 @@ end
 -- REFRESH
 -- Esta función se llama cada vez que el widget necesita ser redibujado.
 -- Aquí es donde se debe implementar toda la lógica de dibujo del widget,
--- utilizando utilizando las opciones configuradas en la tabla de opciones.
+-- utilizando las opciones configuradas en la tabla de opciones.
 -- El widget se dibuja dentro de la zona (zone) que se le asignó, y puede
 -- acceder a las opciones para mostrar la información correspondiente.
 -- Es importante optimizar esta función para que el widget se dibuje de
@@ -244,73 +295,133 @@ end
 ---------------------------------------------------------------------------
 
 local function refresh(widget)
-    local z   = widget.zone
+    -- La zona asignada al widget, que contiene las coordenadas (x, y) y
+    -- dimensiones (w, h) para dibujar el widget.
+    local z = widget.zone
+
+    -- Las opciones configuradas por el usuario para el widget, que pueden
+    -- incluir interruptores, fuentes de datos, etc. Estas opciones se pueden usar
+    -- para personalizar la apariencia y el comportamiento del widget según
+    -- las preferencias del usuario.
     local opt = widget.options
 
+    -- Dibuja un fondo sólido para el widget, con un rectángulo
     lcd.drawFilledRectangle(z.x, z.y, z.w, z.h, BLACK)
+
+    -- Dibuja un rectángulo gris en la parte superior del widget para mostrar
+    -- la información principal, como el estado del motor, el estado de armado,
+    -- el modo de vuelo, el nombre del modelo, etc. Este rectángulo sirve como
+    -- fondo para resaltar esta información y mejorar su legibilidad.
     lcd.drawFilledRectangle(z.x, z.y, z.w, 45, GREY)
 
-    ---------------------------------------------------------------------------
-    -- MOTOR / ARM / FM / MODEL NAME
-    ---------------------------------------------------------------------------
 
-    local rssVal   = 0
+    local rssVal   = 0 -- Valor de RSSI, que se obtiene de la fuente de datos "1RSS".
+    -- Si no se obtiene un valor válido, se establece en 0. Este valor se utiliza
+    -- para determinar el color de la información mostrada en el widget,
+    -- como el estado del motor, el estado de armado, el modo de vuelo, etc.
+    -- Si el valor de RSSI es 0, se muestra en blanco; si es diferente de 0,
+    -- se muestra en rosa (ROSA). Además, el valor de RSSI se muestra en la parte
+    -- inferior del widget con un color que varía según la intensidad de la señal:
+    -- verde para buena señal, amarillo para señal media y rojo para señal débil.
+
     local rxSignal = getValue("1RSS") or 0
 
     if rxSignal ~= nil and rxSignal ~= 0 then
         rssVal = getValue("1RSS") or 0
     end
 
-    local motorOn = opt.Motor ~= 0 and getSwitchValue(opt.Motor) == true
-    local armOn   = opt.Arm ~= 0 and getSwitchValue(opt.Arm) == true
-    local modeOn  = opt.Modo ~= 0 and getSwitchValue(opt.Modo) == true
-    local fm      = getFlightMode() or 0
+    -- Obtener el estado de los interruptores configurados en las opciones del widget
+    local motorOn = getValue(opt.Motor)
+    local armOn   = getValue(opt.Arm)
+    local modeOn  = getValue(opt.Modo)
+    local revo    = getValue(opt.Revo)
 
-    local texts   = {
-        motorOn and "MOTOR SI" or "MOTOR NO",
-        armOn and "ARMADO" or "DESARMADO",
-        "Idle-" .. fm,
-        modeOn and "Estable" or "Acro"
-    }
 
+    -- Determinar los colores y textos a mostrar según el estado de los interruptores
     local baseColor
     if rssVal == 0 then
         baseColor = WHITE
     else
-        baseColor = PINK
+        baseColor = ROSA
     end
 
-    local motorColor = motorOn and RED or baseColor
-    local armColor   = armOn and RED or baseColor
-    local modeColor  = modeOn and GREEN or RED
+    local armColor
+    local armText
+    if armOn > 0 then
+        armText = "Armado"
+        armColor = RED
+    else
+        armText = "Desarmado"
+        armColor = baseColor
+    end
 
-    lcd.drawText(z.x + 55, z.y + 8, texts[1], MIDSIZE + motorColor)
-    lcd.drawText(z.x + 200, z.y + 8, texts[2], MIDSIZE + armColor)
-    lcd.drawText(z.x + z.w - 200, z.y + (z.h - 90), texts[3], DBLSIZE + ((rssVal ~= 0) and PINK or WHITE))
+    local modeColor
+    local modeText
+    if modeOn > 0 then
+        modeText = "Estable"
+        modeColor = GREEN
+    else
+        modeText = "Acro"
+        modeColor = RED
+    end
+
+    local motorText = "MOTOR"
+    local motorColor = baseColor
+    if motorOn > 0 then
+        motorText = "Motor SI"
+        motorColor = RED
+    else
+        motorText = "Motor NO"
+        motorColor = baseColor
+    end
+
+
+    local revoText
+    local revoColor
+
+    if revo > 0 then
+        revoText = "Revo 3"
+        revoColor = RED
+    elseif revo < 0 then
+        revoText = "Revo 1"
+        revoColor = GREEN
+    else
+        revoText = "Revo 2"
+        revoColor = YELLOW
+    end
+
+
+    -- Dibuja la información principal en la parte superior del widget,
+    -- utilizando los colores determinados por el estado de los interruptores
+    -- y el valor de RSSI. Esta información incluye el estado del motor,
+    -- el estado de armado, el modo de vuelo, el nombre del modelo, etc.
+
+    lcd.drawText(z.x + 55, z.y + 8, motorText, MIDSIZE + motorColor)
+    lcd.drawText(z.x + 200, z.y + 8, armText, MIDSIZE + armColor)
+    lcd.drawText(z.x + z.w - 200, z.y + (z.h - 90), revoText, DBLSIZE + ((rssVal ~= 0) and ROSA or revoColor))
     lcd.drawText(z.x + z.w - 10, z.y + 8, model.getInfo().name or "MODELO",
-        RIGHT + MIDSIZE + ((rssVal ~= 0) and PINK or WHITE))
+        RIGHT + MIDSIZE + ((rssVal ~= 0) and ROSA or WHITE))
 
-    lcd.drawText(z.x + z.w - 320, z.y + (z.h - 90), texts[4], DBLSIZE + modeColor)
+    lcd.drawText(z.x + z.w - 320, z.y + (z.h - 90), modeText, DBLSIZE + modeColor)
 
-    if bmp then
-        lcd.drawBitmap(bmp, z.x + z.w - 320, z.y + 30)
+    -- Dibuja la imagen del widget en la parte derecha, si se cargó correctamente.
+    if widget.bmp then
+        lcd.drawBitmap(widget.bmp, z.x + z.w - 270, z.y + 55)
+    else
+        lcd.drawText(z.x + z.w - 320, z.y + 30, widget.errorMsg or "Sin imagen", WHITE)
     end
 
+    -- Dibuja la información de RSSI y calidad de señal en la parte inferior del widget,
+    -- utilizando colores que varían según la intensidad de la señal. El valor de RSSI
+    -- se muestra en decibelios (dB) y la calidad de señal se muestra en porcentaje (%).
+    -- Si el valor de RSSI es 0, se muestra en blanco; si es diferente de 0, se muestra en rosa.
+    -- Además, el color del texto varía según la intensidad de la señal: verde para buena señal,
+    -- amarillo para señal media y rojo para señal débil. Esta información es importante para que
+    -- el usuario pueda monitorear la calidad de la conexión entre el transmisor y el receptor,
+    -- lo que puede afectar el rendimiento y la seguridad del vuelo.
 
-    ---------------------------------------------------------------------------
-    -- OPTIONS / TELEMTERY VALUES
-    ---------------------------------------------------------------------------
     local rqtyVal = getValue("RQly") or 0
-    --[[
-    local tescVal  = (opt["Tesc"] ~= 0 and getValue(opt["Tesc"])) or 0
-    local currVal  = (opt["Curr"] ~= 0 and getValue(opt["Curr"])) or 0
-    local RpmHVal  = (opt["RpmH"] ~= 0 and getValue(opt["RpmH"])) or 0
-    local RpmTVal  = (opt["RpmT"] ~= 0 and getValue(opt["RpmT"])) or 0
-    local vPerCell = (opt["Vcel"] ~= 0 and getValue(opt["Vcel"])) or 0
-    local tpwrVal  = (opt["Tpwr"] ~= 0 and getValue(opt["Tpwr"])) or 0
-    local trssVal  = (opt["Trss"] ~= 0 and getValue(opt["Trss"])) or 0
-    local tqlyVal  = (opt["Tqly"] ~= 0 and getValue(opt["Tqly"])) or 0
-]]
+
     local rssColor = (rssVal > -80) and GREEN or ((rssVal > -90) and YELLOW or RED)
     lcd.drawText((z.x + (z.w / 8 * 1)), z.y + (z.h - 45), string.format("%ddB", rssVal),
         CENTER + ((rssVal ~= 0) and rssColor or WHITE))
@@ -324,64 +435,130 @@ local function refresh(widget)
     lcd.drawText((z.x + (z.w / 8 * 2)), z.y + (z.h - 25), "RQly",
         CENTER + ((rssVal ~= 0) and rqtyColor or WHITE))
 
-    --[[
 
+    -- Dibuja la información de potencia de transmisión (TPWR) recibida por el receptor,
+    -- utilizando colores que varían según el nivel de potencia. El valor de potencia
+    -- se muestra en miliwatios (mW). Si el valor de potencia es 0, se muestra en blanco;
+    -- si es diferente de 0, se muestra en rosa. Además, el color del texto varía según el
+    -- nivel de potencia: verde para buena potencia, amarillo para potencia media y rojo
+    -- para potencia baja.
+
+    local tpwrVal = getValue("TPWR") or 0
     local tpwrColor = (tpwrVal > 200) and GREEN or ((tpwrVal > 99) and YELLOW or RED)
     lcd.drawText((z.x + (z.w / 8 * 3)), z.y + (z.h - 45), string.format("%dmW", tpwrVal),
         CENTER + ((rssVal ~= 0) and tpwrColor or WHITE))
-    lcd.drawText((z.x + (z.w / 8 * 3)), z.y + (z.h - 25), sourceLabel(opt["Tpwr"], "TPWR"),
+    lcd.drawText((z.x + (z.w / 8 * 3)), z.y + (z.h - 25), "TPWR",
         CENTER + ((rssVal ~= 0) and tpwrColor or WHITE))
 
+
+
+    -- información de la intensidad de la señal que recibe el transmisor desde la telemetría del
+    -- receptor, utilizando colores que varían según la intensidad de la señal. El valor de intensidad
+    -- se muestra en decibelios (dB). Si el valor de intensidad es 0, se muestra en blanco;
+    -- si es diferente de 0, se muestra en rosa. Además, el color del texto varía según la intensidad
+    -- de la señal: verde para buena señal, amarillo para señal media y rojo para señal débil.
+
+    local trssVal = getValue("TRSS") or 0
     local trssColor = (trssVal > -80) and GREEN or ((trssVal > -90) and YELLOW or RED)
     lcd.drawText((z.x + (z.w / 8 * 4)), z.y + (z.h - 45), string.format("%ddB", trssVal),
         CENTER + ((rssVal ~= 0) and trssColor or WHITE))
-    lcd.drawText((z.x + (z.w / 8 * 4)), z.y + (z.h - 25), sourceLabel(opt["Trss"], "TRSS"),
+    lcd.drawText((z.x + (z.w / 8 * 4)), z.y + (z.h - 25), "TRSS",
         CENTER + ((rssVal ~= 0) and trssColor or WHITE))
 
+
+    -- Dibuja la información de calidad de enlace (TQly) recibida por el transmisor desde
+    -- la telemetría del receptor, utilizando colores que varían según la calidad del enlace.
+    -- El valor de calidad se muestra en porcentaje (%). Si el valor de calidad es 0, se muestra
+    -- en blanco; si es diferente de 0, se muestra en rosa. Además, el color del texto varía
+    -- según la calidad del enlace: verde para buena calidad, amarillo para calidad media y
+    -- rojo para calidad baja.
+
+    local tqlyVal = getValue("TQly") or 0
     local tqlyColor = (tqlyVal > 98) and GREEN or ((tqlyVal > 90) and YELLOW or RED)
     lcd.drawText((z.x + (z.w / 8 * 5)), z.y + (z.h - 45), string.format("%d%%", tqlyVal),
         CENTER + ((rssVal ~= 0) and tqlyColor or WHITE))
-    lcd.drawText((z.x + (z.w / 8 * 5)), z.y + (z.h - 25), sourceLabel(opt["Tqly"], "TQly"),
+    lcd.drawText((z.x + (z.w / 8 * 5)), z.y + (z.h - 25), "TQly",
         CENTER + ((rssVal ~= 0) and tqlyColor or WHITE))
 
+
+    --Corriente consumida por el helicóptero
+    local currVal = getValue("Curr") or 0
     lcd.drawText((z.x + (z.w / 8 * 6)), z.y + (z.h - 45), string.format("%.2fA", currVal),
         CENTER + ((rssVal ~= 0) and GREEN or WHITE))
-    lcd.drawText((z.x + (z.w / 8 * 6)), z.y + (z.h - 25), sourceLabel(opt["Curr"], "Corr"),
+    lcd.drawText((z.x + (z.w / 8 * 6)), z.y + (z.h - 25), "Corr",
         CENTER + ((rssVal ~= 0) and GREEN or WHITE))
 
+
+    -- Temperatura del ESC del helicóptero,
+    local tescVal = getValue("Tesc") or 0
     local tescColor = (tescVal > 50) and RED or ((tescVal > 45) and YELLOW or GREEN)
     lcd.drawText((z.x + (z.w / 8 * 7)), z.y + (z.h - 45), string.format("%d°C", tescVal),
         CENTER + ((rssVal ~= 0) and tescColor or WHITE))
-    lcd.drawText((z.x + (z.w / 8 * 7)), z.y + (z.h - 25), sourceLabel(opt["Tesc"], "TESC"),
+    lcd.drawText((z.x + (z.w / 8 * 7)), z.y + (z.h - 25), "TESC",
         CENTER + ((rssVal ~= 0) and tescColor or WHITE))
 
 
-    ---------------------------------------------------------------------------
-    -- RPM
-    ---------------------------------------------------------------------------
+    -- Velocidad de rotación del rotor principal (rpm H) y del rotor de cola (rpm T) del helicóptero,
+    -- utilizando colores que varían según el valor de RSSI. Si el valor de RSSI es 0,
+    -- se muestra en blanco; si es diferente de 0, se muestra en rosa.
 
-    lcd.drawText(z.x + 5, z.y + 50, "rpm H", SMLSIZE + LEFT + BOLD + ((rssVal ~= 0) and PINK or WHITE))
+    local RpmHVal = getValue("Hspd") or 0
+    lcd.drawText(z.x + 5, z.y + 50, "rpm H", SMLSIZE + LEFT + BOLD + ((rssVal ~= 0) and ROSA or WHITE))
     lcd.drawText(z.x + 80, z.y + 45, string.format("%d", RpmHVal),
-        MIDSIZE + LEFT + BOLD + ((rssVal ~= 0) and PINK or WHITE))
+        MIDSIZE + LEFT + BOLD + ((rssVal ~= 0) and ROSA or WHITE))
 
-    lcd.drawText(z.x + 5, z.y + 75, "rpm T", SMLSIZE + LEFT + BOLD + ((rssVal ~= 0) and PINK or WHITE))
+    local RpmTVal = getValue("Tspd") or 0
+    lcd.drawText(z.x + 5, z.y + 75, "rpm T", SMLSIZE + LEFT + BOLD + ((rssVal ~= 0) and ROSA or WHITE))
     lcd.drawText(z.x + 80, z.y + 70, string.format("%d", RpmTVal),
-        MIDSIZE + LEFT + BOLD + ((rssVal ~= 0) and PINK or WHITE))
+        MIDSIZE + LEFT + BOLD + ((rssVal ~= 0) and ROSA or WHITE))
 
 
-    ---------------------------------------------------------------------------
+
     -- TIMER
-    ---------------------------------------------------------------------------
-]]
-    local timer = model.getTimer(0) --Timer 1 (index starts at 0)
-    local timeLeft = timer.value or 0
 
-    lcd.drawText(z.x + z.w - 10, z.y + (z.h - 90), string.format("%02d:%02d", math.floor(timeLeft / 60), timeLeft % 60),
-        RIGHT + DBLSIZE + ((rssVal ~= 0) and YELLOW or WHITE))
+    -- Este bloque de código implementa un temporizador que se inicia cuando el helicóptero está armado,
+    -- el motor está encendido y la velocidad del rotor principal (rpm H) es mayor que 0.
+    -- El temporizador se muestra en formato minutos:segundos (MM:SS) en la parte inferior del widget.
+    -- Si alguna de las condiciones para iniciar el temporizador no se cumple, el temporizador se pausa.
+    -- El tiempo transcurrido se actualiza solo cuando el temporizador está corriendo,
+    -- y se muestra con un color que varía según el valor de RSSI: rosa si RSSI es diferente de 0,
+    -- o blanco si RSSI es 0.
 
-    ---------------------------------------------------------------------------
+    if armOn > 0 and motorOn > 0 and RpmHVal > 0 then
+        --correr
+        if not running then
+            running = true
+            startTime = getTime() - elapsed -- reanudar desde donde quedó
+        end
+    else
+        --pausar
+        running = false
+    end
+
+    -- Actualizar tiempo si está corriendo
+    if running then
+        elapsed = getTime() - startTime
+    end
+
+
+
+    -- Convertir a minutos:segundos
+    local minutos = math.floor(elapsed / 6000) -- 6000 milésimas = 60s
+    local segundos = math.floor((elapsed % 6000) / 100)
+
+    -- Mostrar tiempo en formato MM:SS
+    lcd.drawText(z.x + z.w - 10, z.y + (z.h - 90), string.format("%02d:%02d", minutos, segundos),
+        RIGHT + DBLSIZE + ((rssVal ~= 0) and ((running) and YELLOW or ROSA) or WHITE))
+
+
+
+
     -- TX VOLTAGE
-    ---------------------------------------------------------------------------
+    -- Este bloque de código muestra la información del voltaje de la batería del transmisor (Tx Voltage) en la parte inferior derecha del widget.
+    -- El valor del voltaje se obtiene de la fuente de datos "tx-voltage". Si el valor de voltaje
+    -- es mayor que 7.5V, se muestra en verde; si es mayor que 6.8V pero menor o igual a 7.5V,
+    -- se muestra en amarillo y parpadea; si es menor o igual a 6.8V, se muestra en rojo oscuro y parpadea.
+
     local txV = getValue("tx-voltage") or 0
 
     local txvColor
@@ -475,7 +652,7 @@ return {
     create = create,
     refresh = refresh,
     update = update,
-    options = options_def
+    options = options
 }
 
 

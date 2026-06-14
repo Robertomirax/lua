@@ -13,15 +13,13 @@
 ---------------------------------------------------------------------------
 -- variables globales
 ----------------------------------------------------------------------------
--- Esta sección se utiliza para definir variables globales que pueden ser
--- utilizadas en todo el widget. Estas variables pueden almacenar información
--- como colores, imágenes, estados, etc. En este caso, se definen dos colores
--- personalizados, BROWN y ROSA, utilizando la función lcd.RGB para crear
--- colores específicos que se utilizarán en el widget. Estas variables
--- globales permiten que el widget tenga una apariencia personalizada y
--- consistente en toda su interfaz, y facilitan la reutilización de valores
--- que se necesitan en diferentes partes del código, como en la función de
--- refresco para dibujar elementos con los colores definidos.
+-- Esta sección define las variables globales que se utilizan en el widget.
+-- Estas variables pueden almacenar información sobre el estado del widget,
+-- como el tiempo de inicio, el tiempo transcurrido, si el temporizador está
+-- en funcionamiento, etc. En este caso, se definen variables para controlar
+-- un temporizador interno del widget y una variable para el color rosa (ROSA)
+-- que se utiliza en la función de refresco para mostrar información en rosa
+-- cuando el valor de RSSI es diferente de 0.
 ---------------------------------------------------------------------------
 
 local ROSA = lcd.RGB(206, 126, 252)
@@ -32,7 +30,9 @@ local elapsed = 0
 local running = false
 
 ---------------------------------------------------------------------------
---- Funciones auxiliares. Estas funciones se utilizan para realizar tareas
+--- Funciones auxiliares
+---------------------------------------------------------------------------
+--- Estas funciones se utilizan para realizar tareas
 ---  específicas que se necesitan en el widget, como cargar imágenes,
 ---  dibujar iconos personalizados, formatear texto, etc. Estas funciones
 ---  ayudan a mantener el código organizado y modular, permitiendo que la
@@ -44,25 +44,17 @@ local running = false
 ---  personalizada en la pantalla del widget, mejorando la experiencia del
 ---  usuario y proporcionando información relevante de manera clara y concisa.
 ---------------------------------------------------------------------------
----------------------------------------------------------------------------
--- IMAGE funciones para cargar imágenes desde la carpeta IMAGES del widget.
--- La función pngFilename se encarga de verificar si el nombre de la imagen
--- tiene la extensión .png, y si no, se la agrega automáticamente.
--- La función loadImage intenta cargar la imagen especificada y almacena el
--- resultado en la variable bm. Si la imagen se carga correctamente,
--- devuelve true; de lo contrario, devuelve false.
--- Estas funciones permiten al widget mostrar una imagen personalizada en la
--- pantalla, lo que puede mejorar la apariencia y proporcionar información
--- visual adicional al usuario. Es importante asegurarse de que las imágenes
--- estén en la carpeta correcta y tengan el formato adecuado para que se
--- carguen correctamente en el widget.
-----------------------------------------------------------------------------
---*************************************************************************
----FUNCIONES AUXILIARES
 
+-- dibujar un icono de batería personalizado en la pantalla del widget,
+-- utilizando las coordenadas (x, y), las dimensiones (w, h), el porcentaje de
+-- batería (percent) y el color (color) como parámetros. El icono de batería
+-- se dibuja como un rectángulo con un pequeño rectángulo adicional para
+-- representar el terminal positivo de la batería. El nivel de carga de la
+-- batería se muestra como un rectángulo lleno dentro del icono, cuyo ancho
+-- se ajusta según el porcentaje de batería. El color del rectángulo lleno
+-- varía según el nivel de carga, proporcionando una representación visual
+-- clara del estado de la batería.
 
-
--- BATTERY ICON
 local function drawBatteryIcon(x, y, w, h, percent, color)
     lcd.drawRectangle(x, y, w, h, WHITE)
     lcd.drawFilledRectangle(x + w, y + h / 3, 4, h / 3, WHITE)
@@ -71,12 +63,12 @@ end
 
 --*************************************************************************
 
---+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 --- CAMPOS DEL WIDGET
---- Cada widget debe definir al menos tres campos: NAME, CREATE y REFRESH. El
---- campo NAME es una cadena que identifica el widget, CREATE es una función
----  que se llama para crear una instancia del widget, y REFRESH es una
----  función que se llama para dibujar el widget en la pantalla.
+--- Cada widget debe definir al menos tres campos: NAME, CREATE, REFRESH y RETURN.
+--- El campo NAME es una cadena que identifica el widget, CREATE es una función
+---  que se llama para crear una instancia del widget, REFRESH es una
+---  función que se llama para dibujar el widget en la pantalla, y RETURN es una
+---  función que se llama para devolver el valor del widget.
 ---  Además, el widget puede definir un campo OPTIONS para permitir que
 ---  el usuario configure opciones personalizadas para el widget, y un campo
 ---  UPDATE para actualizar las opciones del widget cuando el usuario las
@@ -154,9 +146,9 @@ Tipos de opciones:
 
 
 -- Esta tabla define las opciones configurables para el widget. Cada opción
---   tiene un nombre (por ejemplo, "Arm", "Motor", "Modo", "Revo"), un tipo
+--   tiene un nombre (en este caso, "Arm", "Motor", "Modo", "Revo"), un tipo
 -- (en este caso, SOURCE, que permite seleccionar una fuente de datos como
--- un interruptor) y un valor por defecto (por ejemplo, "SE", "SF", "SA", "SB").
+-- un interruptor) y un valor por defecto (en este caso los interruptores, "SE", "SF", "SA", "SB").
 -- Estas opciones se mostrarán en la interfaz de configuración del widget,
 -- y el usuario podrá seleccionar las fuentes de datos correspondientes para
 -- cada opción. El widget luego puede acceder a estas opciones para mostrar
@@ -177,7 +169,7 @@ local options = {
 --Esta función se llama una sola vez cuando se registra (se inicia) la
 --instancia del widget. Aquí es donde se deben inicializar las variables,
 --cargar recursos, cargar imágenes, etc. El widget se crea con una zona
---(zone) y opciones (opts) que se definen en la tabla de opciones.
+--(zone) con las opciones (opts) que se definen en la tabla de opciones.
 -- el parametro zone es un objeto que contiene las coordenadas y dimensiones
 -- de la zona asignada al widget en la pantalla. El widget puede usar esta
 -- información para dibujar su contenido dentro de esa zona específica.
@@ -186,7 +178,7 @@ local options = {
 -- etc. Estas opciones se pueden usar para personalizar la apariencia y el
 -- comportamiento del widget según las preferencias del usuario. En esta
 -- función, también se puede cargar una imagen personalizada para el widget
--- utilizando la función loadImage, lo que permite mostrar gráficos o iconos
+-- utilizando la función Bitmap.open, lo que permite mostrar gráficos o iconos
 -- específicos relacionados con el Goosky S2 o la Radiomaster TX16S mk2.
 --
 -- Parámetros:
@@ -540,8 +532,6 @@ local function refresh(widget)
         elapsed = getTime() - startTime
     end
 
-
-
     -- Convertir a minutos:segundos
     local minutos = math.floor(elapsed / 6000) -- 6000 milésimas = 60s
     local segundos = math.floor((elapsed % 6000) / 100)
@@ -550,11 +540,9 @@ local function refresh(widget)
     lcd.drawText(z.x + z.w - 10, z.y + (z.h - 90), string.format("%02d:%02d", minutos, segundos),
         RIGHT + DBLSIZE + ((rssVal ~= 0) and ((running) and YELLOW or ROSA) or WHITE))
 
-
-
-
-    -- TX VOLTAGE
-    -- Este bloque de código muestra la información del voltaje de la batería del transmisor (Tx Voltage) en la parte inferior derecha del widget.
+    -- TX VOLTAJE 
+    -- Este bloque de código muestra la información del voltaje de la batería del transmisor
+    -- (Tx Voltage) en la parte inferior derecha del widget.
     -- El valor del voltaje se obtiene de la fuente de datos "tx-voltage". Si el valor de voltaje
     -- es mayor que 7.5V, se muestra en verde; si es mayor que 6.8V pero menor o igual a 7.5V,
     -- se muestra en amarillo y parpadea; si es menor o igual a 6.8V, se muestra en rojo oscuro y parpadea.
@@ -577,19 +565,26 @@ local function refresh(widget)
     lcd.drawText(z.x + z.w - 10, z.y + (z.h - 130), string.format("Tx Bat %.1fV", txV),
         RIGHT + MIDSIZE + txvColor + destello)
 
-    -------------------------------------------------------------------------
-    -- RX BATTERY
-    -------------------------------------------------------------------------
-
-    --[[
-    -- VBAT Voltage → Percentage
+    
+    -- RX BATERÍA
+    -- Este bloque de código muestra la información del voltaje por celda de la batería del receptor
+    -- (Rx Battery) en la parte inferior izquierda del widget.
+    -- El valor del voltaje por celda se obtiene de la fuente de datos "Vcel".
+    -- El porcentaje de voltaje se calcula en función de un rango típico de voltaje por celda
+    -- (3.3V a 4.2V) y se muestra como un icono de batería con un color que varía según el
+    -- porcentaje: verde para más del 50%, amarillo para entre 30% y 50%, y rojo para menos del 30%.
+    -- Si el porcentaje es menor o igual al 30%, el icono parpadea para alertar al usuario sobre
+    -- el bajo nivel de batería. Además, el valor del voltaje por celda se muestra en texto debajo
+    -- del icono de la batería.
+    local vPerCell = getValue("Vcel") or 0
+    -- 
     local vMin = 3.3
     local vMax = 4.2
 
     local vPercent = (vPerCell - vMin) / (vMax - vMin)
     vPercent = math.max(0, math.min(1, vPercent))
 
-    -- VBAT Color + flash logic
+    -- Determinar el color del icono de la batería según el porcentaje de voltaje por celda
     local vColor = GREEN
     local flash = false
 
@@ -604,7 +599,7 @@ local function refresh(widget)
         vColor = BLACK
     end
 
-    -- DRAW BATTERY ICON
+    -- Dibujar el icono de la batería y el voltaje por celda en la parte inferior izquierda del widget
     local battW = 150
     local battH = 45
     local battX = z.x + 6
@@ -618,8 +613,13 @@ local function refresh(widget)
     lcd.drawText(textX, textY, string.format("%.2fV", vPerCell), CENTER + WHITE + BOLD)
 
 
-    -- porcentaje de batería
-    local batPercent = getValue(opt["Bat%"]) or 0
+    -- porcentaje restante de la batería del receptor, que se obtiene de la fuente de
+    -- datos "Bat%". El porcentaje se muestra debajo del icono de la batería con un color que varía
+    -- según el nivel de batería: verde para más del 50%, amarillo para entre 30% y 50%, y rojo para
+    -- menos del 30%. Si el porcentaje es menor o igual al 30%, el texto parpadea para
+    -- alertar al usuario sobre el bajo nivel de batería.
+
+    local batPercent = getValue("Bat%") or 0
     local batColor = BLUE
     if batPercent <= 50 then
         batColor = RED
@@ -628,12 +628,17 @@ local function refresh(widget)
     lcd.drawGauge(battX, battY + battH + 5, battW, 20, batPercent, 100, batColor)
     lcd.drawText(textX, textY + 38, string.format("%d%%", batPercent), CENTER + WHITE)
 
-    -- capacidad de la batería
-    local capaVal = getValue(opt["Capa"]) or 0
+    -- capacidad restante de la batería del receptor, que se obtiene de la fuente de datos "Capa".
+    -- El valor de capacidad se muestra debajo del porcentaje de batería con un color que varía
+    -- según el nivel de capacidad: verde para más de 500mAh, amarillo para entre 200mAh y 500mAh,
+    -- y rojo para menos de 200mAh. Si la capacidad es menor o igual a 200mAh, el texto parpadea
+    -- para alertar al usuario sobre el bajo nivel de batería.
+
+    local capaVal = getValue("Capa") or 0
 
     lcd.drawGauge(battX, battY + battH + 30, battW, 20, capaVal, 750, BROWN)
     lcd.drawText(textX, textY + 63, string.format("%dmA", capaVal), CENTER + WHITE)
-    ]]
+    
 end
 ---------------------------------------------------------------------------
 --- RETURN

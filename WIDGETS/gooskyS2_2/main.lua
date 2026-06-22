@@ -29,11 +29,6 @@ local startTime = 0
 local elapsed = 0
 local running = false
 
--- Variables del contador de vuelos
-local vuelos = 0
-local archivoVuelos = "/WIDGETS/gooskyS2/vuelos.txt"
-local armado = false  -- Si ya se registró el inicio del vuelo
-
 ---------------------------------------------------------------------------
 --- Funciones auxiliares
 ---------------------------------------------------------------------------
@@ -65,32 +60,6 @@ local function drawBatteryIcon(x, y, w, h, percent, color)
     lcd.drawFilledRectangle(x + w, y + h / 3, 4, h / 3, WHITE)
     lcd.drawFilledRectangle(x + 1, y + 1, (w - 2) * percent, h - 2, color)
 end
-
-
--- Cargar datos desde archivo de vuelos
-local function loadData()
-    local f = io.open(archivoVuelos, "r")
-    if f then
-        local line = io.read(f, 16)  --f:read("*l")    -- lee primera línea
-        io.close(f)
-        vuelos = tonumber(line) or 0 -- convierte a número
-    else
-        vuelos = 0                   -- si no existe archivo
-    end
-end
-
-
--- Guardar datos en archivo de vuelos
-local function saveData()
-    local f = io.open(archivoVuelos, "w")
-    if f then
-        io.write(f, tostring(vuelos)) -- Guardar vuelos
-        io.close(f)
-    end
-end
-
-
-
 
 --*************************************************************************
 
@@ -237,9 +206,6 @@ local function create(zone, opts)
     else
         widget.bmp = nil
     end
-
-    loadData()     -- Cargar datos desde archivo de vuelos
-    armado = false -- Estado de armado inicializado a falso
 
     return widget
 end
@@ -406,32 +372,29 @@ local function refresh(widget)
     local revoColor
 
     if revo > 0 then
-        revoText = "RPM alta"
+        revoText = "Revo 3"
         revoColor = RED
     elseif revo < 0 then
-        revoText = "RPM baja"
+        revoText = "Revo 1"
         revoColor = GREEN
     else
-        revoText = "RPM media"
+        revoText = "Revo 2"
         revoColor = YELLOW
     end
 
 
     -- Dibuja la información principal en la parte superior del widget,
-    -- Motor si o no, armado o desarmado y nombre del modelo.
-    -- utiliza los colores determinados por el estado de los interruptores
-    -- y el valor de RSSI.
+    -- utilizando los colores determinados por el estado de los interruptores
+    -- y el valor de RSSI. Esta información incluye el estado del motor,
+    -- el estado de armado, el modo de vuelo, el nombre del modelo, etc.
 
     lcd.drawText(z.x + 55, z.y + 8, motorText, MIDSIZE + motorColor)
     lcd.drawText(z.x + 200, z.y + 8, armText, MIDSIZE + armColor)
+    lcd.drawText(z.x + z.w - 200, z.y + (z.h - 90), revoText, DBLSIZE + ((rssVal ~= 0) and ROSA or revoColor))
     lcd.drawText(z.x + z.w - 10, z.y + 8, model.getInfo().name or "MODELO",
         RIGHT + MIDSIZE + ((rssVal ~= 0) and ROSA or WHITE))
 
-
-    -- dibuja el modo de vuelo (acro o estable) y la opción de RPM alta, baja o media
-    lcd.drawText(z.x + z.w - 320, z.y + (z.h - 85), modeText, MIDSIZE + modeColor)
-    lcd.drawText(z.x + z.w - 225, z.y + (z.h - 85), revoText, MIDSIZE + ((rssVal ~= 0) and ROSA or revoColor))
-
+    lcd.drawText(z.x + z.w - 320, z.y + (z.h - 90), modeText, DBLSIZE + modeColor)
 
     -- Dibuja la imagen del widget en la parte derecha, si se cargó correctamente.
     if widget.bmp then
@@ -577,7 +540,7 @@ local function refresh(widget)
     lcd.drawText(z.x + z.w - 10, z.y + (z.h - 90), string.format("%02d:%02d", minutos, segundos),
         RIGHT + DBLSIZE + ((rssVal ~= 0) and ((running) and YELLOW or ROSA) or WHITE))
 
-    -- TX VOLTAJE
+    -- TX VOLTAJE 
     -- Este bloque de código muestra la información del voltaje de la batería del transmisor
     -- (Tx Voltage) en la parte inferior derecha del widget.
     -- El valor del voltaje se obtiene de la fuente de datos "tx-voltage". Si el valor de voltaje
@@ -602,7 +565,7 @@ local function refresh(widget)
     lcd.drawText(z.x + z.w - 10, z.y + (z.h - 130), string.format("Tx Bat %.1fV", txV),
         RIGHT + MIDSIZE + txvColor + destello)
 
-
+    
     -- RX BATERÍA
     -- Este bloque de código muestra la información del voltaje por celda de la batería del receptor
     -- (Rx Battery) en la parte inferior izquierda del widget.
@@ -614,7 +577,7 @@ local function refresh(widget)
     -- el bajo nivel de batería. Además, el valor del voltaje por celda se muestra en texto debajo
     -- del icono de la batería.
     local vPerCell = getValue("Vcel") or 0
-    --
+    -- 
     local vMin = 3.3
     local vMax = 4.2
 
@@ -675,22 +638,7 @@ local function refresh(widget)
 
     lcd.drawGauge(battX, battY + battH + 30, battW, 20, capaVal, 750, BROWN)
     lcd.drawText(textX, textY + 63, string.format("%dmA", capaVal), CENTER + WHITE)
-
-    -- Vuelos
-    -- Cantidad de vuelos realizados.    
-    if motorOn > 0 and armOn > 0 and rssVal ~= 0 then
-        if armado == false then
-            vuelos = vuelos + 1
-            saveData()
-            armado = true
-        end
-    end
-
-
-
-
-    lcd.drawText((z.x + (z.w / 8 * 7) + 20), z.y + (z.h - 225), vuelos, CENTER + ((rssVal ~= 0) and YELLOW or WHITE))
-    lcd.drawText((z.x + (z.w / 8 * 7) + 20), z.y + (z.h - 205), "VUELOS", CENTER + ((rssVal ~= 0) and YELLOW or WHITE))
+    
 end
 ---------------------------------------------------------------------------
 --- RETURN
@@ -712,3 +660,74 @@ return {
     options = options
 }
 
+
+--[[
+
+
+local name = "gooskyS2"
+
+-- Lista de sensores a mostrar en texto
+local sensors = {
+    "Alt",    -- Altitud
+    "GPS",    -- Coordenadas GPS
+    "Tmp1",   -- Temperatura 1
+    "Tmp2",   -- Temperatura 2
+    "Fuel",   -- Combustible
+    "RPM",    -- Revoluciones
+    "AccX",   -- Acelerómetro X
+    "AccY",   -- Acelerómetro Y
+    "AccZ"    -- Acelerómetro Z
+}
+
+-- Función para dibujar un gauge circular
+-- Recibe posición (x,y), radio, valor actual y rango máximo
+local function drawGauge(x, y, r, value, max, label)
+    -- Dibuja círculo base
+    lcd.drawCircle(x, y, r, SOLID, FORCE)
+    -- Calcula ángulo proporcional al valor
+    local angle = math.floor((value / max) * 270) - 135
+    local rad = math.rad(angle)
+    local gx = x + math.floor(r * math.cos(rad))
+    local gy = y + math.floor(r * math.sin(rad))
+    -- Dibuja aguja
+    lcd.drawLine(x, y, gx, gy, SOLID, FORCE)
+    -- Etiqueta y valor
+    lcd.drawText(x - r, y + r + 5, label .. ": " .. tostring(value), 0)
+end
+
+-- Función create: inicializa el widget
+local function create(zone, options)
+    return { zone=zone, options=options }
+end
+
+-- Función update: actualiza opciones si cambian
+local function update(widget, options)
+    widget.options = options
+end
+
+-- Función refresh: dibuja gauges y lista de sensores
+local function refresh(widget)
+    lcd.clear()
+
+    -- Gauges principales
+    local volt = getValue("VFAS") or 0
+    local curr = getValue("Curr") or 0
+    local rssi = getValue("RSSI") or 0
+
+    -- Dibuja tres gauges en la parte superior
+    drawGauge(widget.zone.x + 40, widget.zone.y + 40, 30, volt, 25, "Volt")
+    drawGauge(widget.zone.x + 120, widget.zone.y + 40, 30, curr, 50, "Amp")
+    drawGauge(widget.zone.x + 200, widget.zone.y + 40, 30, rssi, 100, "RSSI")
+
+    -- Lista de sensores adicionales en texto
+    local y = widget.zone.y + 90
+    for i, s in ipairs(sensors) do
+        local val = getValue(s)
+        lcd.drawText(widget.zone.x, y, s .. ": " .. tostring(val), 0)
+        y = y + 12
+    end
+end
+
+-- Registro del widget
+return { name=name, create=create, update=update, refresh=refresh }
+]]
